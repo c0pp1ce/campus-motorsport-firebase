@@ -1,11 +1,14 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // The accepted claim can only be set if the email is verified.
-    // Therefore no need to check that as well.
-    // IF THAT FUNCTION GETS CHANGED THIS NEEDS TO BE REVIEWED.
+    // Checks if the user is signed in and his email is verified.
+    function isVerifiedUser() {
+      return request.auth != null && request.auth.token.email_verified;
+    }
+
+    // Checks if the user has the accepted role (verified + accepted flag).
     function isAcceptedUser() {
-      return request.auth != null && request.auth.token.accepted == true;
+      return isVerifiedUser() && request.auth.token.accepted == true;
     }
 
     match /{allPaths=**} {

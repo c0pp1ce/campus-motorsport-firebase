@@ -3,9 +3,6 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 
 // Get user and add a custom claim (accepted).
-// Only add the claim if the is accepted and verified
-// Needs to be called after the database has been updated
-// when assigning the accepted role.
 exports.addAcceptedRole = functions.https.onCall((data, context) => {
   if (context.auth === null || context.auth.uid === null) {
     return null;
@@ -24,14 +21,14 @@ exports.addAcceptedRole = functions.https.onCall((data, context) => {
             return false;
           }
           const accepted = data.accepted;
-          if (accepted === true && user.emailVerified === true) {
+          if (accepted === true) {
             return admin.auth().setCustomUserClaims(user.uid, {
               accepted: true,
             }).then(() => {
               return true;
             });
           } else {
-            // User not accepted yet or email is not verified.
+            // User not accepted yet.
             return false;
           }
         }).then((result) => {
