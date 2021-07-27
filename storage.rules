@@ -1,19 +1,15 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-  
-    // Checks if the current users email is verified.
-    function isVerifiedUser() {
-      return request.auth != null && request.auth.token.email_verified;
+    // The accepted claim can only be set if the email is verified.
+    // Therefore no need to check that as well.
+    // IF THAT FUNCTION GETS CHANGED THIS NEEDS TO BE REVIEWED.
+    function isAcceptedUser() {
+      return request.auth != null && request.auth.token.accepted == true;
     }
-      
-    // Checks if the user has been accepted. Accepted users need to have a verified email.
-    //function isAcceptedUser() {
-    //  return  isVerifiedUser()
-     // 	&& get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accepted == true;
-    //}
+
     match /{allPaths=**} {
-      allow read, write: if isVerifiedUser();
+      allow read, write: if isAcceptedUser();
     }
   }
 }

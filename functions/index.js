@@ -7,6 +7,10 @@ admin.initializeApp();
 // Needs to be called after the database has been updated
 // when assigning the accepted role.
 exports.addAcceptedRole = functions.https.onCall((data, context) => {
+  if (context.auth === null || context.auth.uid === null) {
+    return null;
+  }
+
   return admin.auth().getUserByEmail(data.email).then((user) => {
     return admin.firestore().collection("users")
         .doc(user.uid).get().then((doc) => {

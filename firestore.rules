@@ -2,9 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
   
-  		// General db access not allowed. Less restrictive rules defined for needed collections.
-  		allow read: if false;
-    	allow write: if false;
+  	// General db access not allowed. Less restrictive rules defined for needed collections.
+  	allow read: if false;
+    allow write: if false;
   
   	// Check if the user is signed in.
     function isSignedIn() {
@@ -81,8 +81,13 @@ service cloud.firestore {
     
     /// vehicle components
     match /components/{id} {
+
+      function verifyComponentStructure() {
+        return verifyFields(["name", "category", "state", "usedBy"], ["additionalData"]);
+      }
+
     	allow read: if isAcceptedUser();
-    	allow create: if isAdmin();
+    	allow create: if isAdmin() && verifyComponentStructure();
       allow update: if false;
       allow delete: if isAdmin();
     }
