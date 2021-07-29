@@ -79,8 +79,8 @@ service cloud.firestore {
     
     
     
-    /// vehicle components
-    match /components/{id} {
+    // vehicle components
+    match /components/{document} {
 
       function verifyComponentStructure() {
         return verifyFields(["name", "category", "state", "usedBy"], ["additionalData"]);
@@ -89,6 +89,19 @@ service cloud.firestore {
     	allow read: if isAcceptedUser();
     	allow create: if isAdmin() && verifyComponentStructure();
       allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // component-containers (vehicles and stock)
+    match /component-containers/{document} {
+
+      function verifyContainerStructure() {
+        return verifyFields(["name", "type"], ["components", "current-state", "image", "updates"]);
+      }
+
+    	allow read: if isAcceptedUser();
+    	allow create: if isAdmin() && verifyContainerStructure();
+      allow update: if isAcceptedUser() && verifyContainerStructure();
       allow delete: if isAdmin();
     }
   }
