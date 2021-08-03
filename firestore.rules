@@ -83,12 +83,18 @@ service cloud.firestore {
     match /components/{document} {
 
       function verifyComponentStructure() {
-        return verifyFields(["name", "category", "state", "usedBy"], ["additionalData"]);
+        return verifyFields(["name", "category", "state", "usedBy", "id"], ["additionalData", "baseEventCounter"]);
+      }
+      
+      function verifyAllowedUpdates() {
+      	let updatesForbiddenFields = request.resource.data.diff(resource.data).
+        													affectedKeys().hasAny(['additionalData', 'id']);
+        return !updatesForbiddenFields;                      
       }
 
     	allow read: if isAcceptedUser();
     	allow create: if isAdmin() && verifyComponentStructure();
-      allow update: if false;
+      allow update: if isAcceptedUser() && verifyAllowedUpdates();
       allow delete: if isAdmin();
     }
 
