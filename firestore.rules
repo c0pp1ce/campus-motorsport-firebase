@@ -88,7 +88,7 @@ service cloud.firestore {
       
       function verifyAllowedUpdates() {
       	let updatesForbiddenFields = request.resource.data.diff(resource.data).
-        													affectedKeys().hasAny(['additionalData', 'id']);
+        													affectedKeys().hasAny(['additionalData', 'id', 'baseEventCounter']);
         return !updatesForbiddenFields;                      
       }
 
@@ -102,7 +102,7 @@ service cloud.firestore {
     match /component-containers/{document} {
 
       function verifyContainerStructure() {
-        return verifyFields(["name", "type"], ["components", "current-state", "image", "updates"]);
+        return verifyFields(["name", "type"], ["components", "current-state", "image", "updates", "events"]);
       }
 
     	allow read: if isAcceptedUser();
