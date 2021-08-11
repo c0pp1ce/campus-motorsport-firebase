@@ -4,6 +4,7 @@ const axios = require("axios").default;
 const UrlSearchParams = require("url-search-params");
 const Fs = require("fs");
 const Path = require("path");
+const os = require("os");
 admin.initializeApp();
 
 // Get user and add a custom claim (accepted).
@@ -97,7 +98,7 @@ exports.getTrainingGroundsOverviews = functions.https.onCall(
                 const loginParams = {
                   "action": "login",
                   "lgname": "App@poc-bot",
-                  "lgpassword": functions.config["poc-bot"].password,
+                  "lgpassword": functions.config()["poc-bot"].password,
                   "lgtoken": loginToken,
                   "format": "json",
                 };
@@ -232,8 +233,9 @@ function processImage(image, apiUrl, cookie) {
               const originalUrl = pages[pageId].imageinfo[0].url;
               if (originalUrl) {
                 // Download the image.
-                const filePath = Path.resolve(image);
+                const filePath = Path.resolve(os.tmpdir(), image);
                 const writer = Fs.createWriteStream(filePath);
+                console.log(filePath);
 
                 axios.get(originalUrl, {
                   headers: {
@@ -266,6 +268,7 @@ function processImage(image, apiUrl, cookie) {
                           .then(() => {
                             // Upload file to Storage and Firestore.
                             const storagePath = "images/poc-bot/" + image;
+                            console.log(storagePath);
                             admin.storage().bucket().upload(filePath,
                                 {destination: storagePath})
                                 .then((response) => {
@@ -305,6 +308,7 @@ function processImage(image, apiUrl, cookie) {
                                       });
                                 })
                                 .catch((error) => {
+                                  console.log(error);
                                   Fs.unlinkSync(filePath);
                                   throw error;
                                 });
