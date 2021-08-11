@@ -74,6 +74,10 @@ exports.deleteUserFromAuth = functions.firestore.document("users/{uid}")
  */
 exports.getTrainingGroundsOverviews = functions.https.onCall(
     (data, context) => {
+      if (context.auth === null || context.auth.uid === null ||
+        !context.auth.token.accepted) {
+        return null;
+      }
       const apiUrl = "http://wiki.campus-motorsport.de/api.php";
       // Get parameters to obtain a login token.
       const getTokenParams = {
