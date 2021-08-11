@@ -93,7 +93,7 @@ exports.getTrainingGroundsOverviews = functions.https.onCall(
                 const loginParams = {
                   "action": "login",
                   "lgname": "App@poc-bot",
-                  "lgpassword": "geot4m74429997dr739m3g7kulu5qp2j",
+                  "lgpassword": functions.config["poc-bot"].password,
                   "lgtoken": loginToken,
                   "format": "json",
                 };
