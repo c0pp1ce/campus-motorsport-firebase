@@ -110,5 +110,19 @@ service cloud.firestore {
       allow update: if isAcceptedUser() && verifyContainerStructure();
       allow delete: if isAdmin();
     }
+
+    // training-grounds
+    match /training-grounds/{document} {
+
+      function verifyContainerStructure() {
+        return verifyFields(["name", "storagePath"], ["image"]);
+      }
+
+      // Created via cloud function which accesses the wiki.
+    	allow read: if isAcceptedUser();
+    	allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
   }
 }
