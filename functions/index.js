@@ -67,7 +67,7 @@ exports.deleteUserFromAuth = functions.firestore.document("users/{uid}")
     });
 
 
-/** Retrieve images of the trainig grounds.
+/** Retrieve images of the training grounds.
  * Each request with timeouts after 5s(image download after 10s).
  *
  * Login based on https://stackoverflow.com/questions/49367096/how-to-login-to-mediawiki-wikipedia-api-in-node-js
