@@ -121,7 +121,7 @@ service cloud.firestore {
       // Created via cloud function which accesses the wiki.
     	allow read: if isAcceptedUser();
     	allow create: if false;
-      allow update: if isAdmin();
+      allow update: if isAcceptedUser();
       allow delete: if isAdmin();
     }
   }
