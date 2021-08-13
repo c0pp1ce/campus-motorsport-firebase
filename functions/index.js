@@ -153,6 +153,19 @@ exports.getTrainingGroundsOverviews = functions.https.onCall(
                                         });
                                   }
                                 }
+                                // Update meta info
+                                const metaInfo = {
+                                  "lastUpdate": new Date.UTC(),
+                                };
+                                admin.firestore().collection("meta-info")
+                                    .doc("training-grounds")
+                                    .update(metaInfo)
+                                    .then((_) => {
+                                      return;
+                                    })
+                                    .catch((error) => {
+                                      throw error;
+                                    });
                               }
                             })
                             .catch((error) => {
@@ -283,7 +296,6 @@ function processImage(image, apiUrl, cookie) {
                                     "name": imageName,
                                     "storagePath": storagePath,
                                     "image": null,
-                                    "lastUpdate": new Date.UTC(),
                                   };
                                   collection
                                       .where("name", "==", imageName)
