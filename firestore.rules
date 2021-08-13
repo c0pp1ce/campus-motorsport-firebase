@@ -132,10 +132,20 @@ service cloud.firestore {
         return verifyFields(["name", "storagePath", "lastUpdate"], ["url"]);
       }
 
-      // Created via cloud function which accesses the wiki.
     	allow read: if isAcceptedUser();
     	allow create: if isAdmin();
       allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // meta-info
+    //
+    // This collection holds info like when has training-grounds been updated etc.
+    match /meta-info/{document} {
+
+    	allow read: if isAcceptedUser();
+    	allow create: if isAdmin();
+      allow update: if isAcceptedUser();
       allow delete: if isAdmin();
     }
   }
