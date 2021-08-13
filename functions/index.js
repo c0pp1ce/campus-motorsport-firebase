@@ -283,6 +283,7 @@ function processImage(image, apiUrl, cookie) {
                                     "name": imageName,
                                     "storagePath": storagePath,
                                     "image": null,
+                                    "lastUpdate": new Date.UTC(),
                                   };
                                   collection
                                       .where("name", "==", imageName)

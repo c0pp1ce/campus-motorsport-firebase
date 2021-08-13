@@ -102,7 +102,7 @@ service cloud.firestore {
     match /component-containers/{document} {
 
       function verifyContainerStructure() {
-        return verifyFields(["name", "type"], ["components", "current-state", "image", "updates", "events"]);
+        return verifyFields(["name", "type"], ["components", "currentState", "image", "updates", "events"]);
       }
 
     	allow read: if isAcceptedUser();
@@ -115,13 +115,27 @@ service cloud.firestore {
     match /training-grounds/{document} {
 
       function verifyContainerStructure() {
-        return verifyFields(["name", "storagePath"], ["image"]);
+        return verifyFields(["name", "storagePath", "lastUpdate"], ["image"]);
       }
 
       // Created via cloud function which accesses the wiki.
     	allow read: if isAcceptedUser();
     	allow create: if false;
       allow update: if isAcceptedUser();
+      allow delete: if isAdmin();
+    }
+
+    // team-structure
+    match /team-structure/{document} {
+
+      function verifyContainerStructure() {
+        return verifyFields(["name", "storagePath", "lastUpdate"], ["url"]);
+      }
+
+      // Created via cloud function which accesses the wiki.
+    	allow read: if isAcceptedUser();
+    	allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
   }
