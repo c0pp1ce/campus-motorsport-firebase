@@ -9,7 +9,8 @@ admin.initializeApp();
 
 // Get user and add a custom claim (accepted).
 exports.addAcceptedRole = functions.https.onCall((data, context) => {
-  if (context.auth === null || context.auth.uid === null) {
+  if (context.auth === null || context.auth.uid === null ||
+    !context.auth.token.accepted) {
     return null;
   }
 
@@ -74,11 +75,13 @@ exports.deleteUserFromAuth = functions.firestore.document("users/{uid}")
  * (Answer by nirinsanity)
  */
 exports.getTrainingGroundsOverviews = functions.https.onCall(
-    (data, context) => {
+    async (data, context) => {
       if (context.auth === null || context.auth.uid === null ||
         !context.auth.token.accepted) {
-        return null;
+        console.log("Insufficent access rights.");
+        return;
       }
+      // API endpoint of the wiki.
       const apiUrl = "http://wiki.campus-motorsport.de/api.php";
       // Get parameters to obtain a login token.
       const getTokenParams = {
@@ -87,103 +90,90 @@ exports.getTrainingGroundsOverviews = functions.https.onCall(
         type: "login",
         format: "json",
       };
+      try {
+        // Get the token and cookie for the login.
+        let response = await axios.get(apiUrl, {params: getTokenParams});
+        const loginToken = response.data.query.tokens.logintoken;
+        const loginCookie = response.headers["set-cookie"].join(";");
+        // Return on bad response.
+        if (response.status !== 200 || !loginToken || !loginCookie) {
+          console.log("Could not get login token.");
+          return;
+        }
+        console.log("Got the login token and cookies.");
 
-      // Get login token and cookies.
-      axios.get(apiUrl, {params: getTokenParams, timeout: 5000})
-          .then((response) => {
-            if (response.status === 200) {
-              const loginToken = response.data.query.tokens.logintoken;
-              if (loginToken) {
-                // Post parameters and cookie for perfoming the login.
-                const loginParams = {
-                  "action": "login",
-                  "lgname": "App@poc-bot",
-                  "lgpassword": functions.config()["poc-bot"].password,
-                  "lgtoken": loginToken,
-                  "format": "json",
-                };
-                const postBody = new UrlSearchParams(loginParams).toString();
-                const loginCookie = response.headers["set-cookie"].join(";");
+        // Perform the login.
+        const loginParams = {
+          "action": "login",
+          "lgname": "App@poc-bot",
+          "lgpassword": functions.config()["poc-bot"].password,
+          "lgtoken": loginToken,
+          "format": "json",
+        };
+        const postBody = new UrlSearchParams(loginParams).toString();
+        response = await axios.post(apiUrl, postBody, {
+          headers: {
+            Cookie: loginCookie,
+          }},
+        );
+        // The cookie needed for any further request.
+        const requestCookie = response.headers["set-cookie"].join(";");
+        if (!requestCookie) {
+          console.log("Login failed.");
+          return;
+        }
+        console.log("Succesful login.");
 
-                // Perform login.
-                axios.post(apiUrl, postBody, {
-                  headers: {
-                    Cookie: loginCookie,
-                  },
-                  timeout: 5000,
-                })
-                    .then((response) => {
-                      // This cookie needs to be set on any further request.
-                      const requestCookie = response.headers["set-cookie"]
-                          .join(";");
-                      if (requestCookie) {
-                        // Get the images from Testgelände page.
+        // Get the images from Testgelände page.
+        const requestParams = {
+          "action": "parse",
+          "page": "Testgelände",
+          "prop": "images",
+          "formatversion": 2,
+          "format": "json",
+        };
+        response = await axios.get(apiUrl, {
+          headers: {
+            Cookie: requestCookie,
+          },
+          params: requestParams,
+        });
+        if (response.status !== 200) {
+          console.log("Could not get image infos.");
+          return;
+        }
+        console.log("Got the image infos.");
 
-                        const requestParams = {
-                          "action": "parse",
-                          "page": "Testgelände",
-                          // pageimages cant be used as it comes
-                          // with 1.34 and above
-                          // but this wiki is 1.28
-                          "prop": "images",
-                          "formatversion": 2,
-                          "format": "json",
-                        };
+        // Filter allowed file formats (e.g. request also returns pdf).
+        const images = getAllowedImages(response.data.parse.images);
+        console.log("Continue to process these images:");
+        console.log(images);
 
-                        axios.get(apiUrl, {
-                          headers: {
-                            Cookie: requestCookie,
-                          },
-                          params: requestParams,
-                          timeout: 5000,
-                        })
-                            .then((response) => {
-                              if (response.status === 200) {
-                                // Filter images by allowed formats.
-                                const images = response.data.parse.images;
-                                const allowedImages = getAllowedImages(images);
+        // Process the images: Get image, store it in Storage, add entry
+        // in Firestore.
+        for (const index in images) {
+          if (index) {
+            console.log("Processing an image...");
+            await processImage(images[index], apiUrl, requestCookie);
+          }
+        }
+        console.log("All images processed.");
 
-                                // Process the images.
-                                for (const index in allowedImages) {
-                                  if (index >=0 ) {
-                                    processImage(allowedImages[index], apiUrl,
-                                        requestCookie)
-                                        .catch((error) => {
-                                          throw error;
-                                        });
-                                  }
-                                }
-                                // Update meta info
-                                const metaInfo = {
-                                  "lastUpdate": new Date.UTC(),
-                                };
-                                admin.firestore().collection("meta-info")
-                                    .doc("training-grounds")
-                                    .update(metaInfo)
-                                    .then((_) => {
-                                      return;
-                                    })
-                                    .catch((error) => {
-                                      throw error;
-                                    });
-                              }
-                            })
-                            .catch((error) => {
-                              throw error;
-                            });
-                      }
-                    })
-                    .catch((error) => {
-                      throw error;
-                    });
-              }
-            }
-          })
-          .catch((error) => {
-            console.log(error);
-          });
+        // Update meta info.
+        console.log("Updating meta-info...");
+        const date = new Date();
+        const data = {
+          "lastUpdate": date.toISOString(),
+        };
+        await admin.firestore().collection("meta-info")
+            .doc("training-grounds")
+            .set(data);
+        console.log("meta-info updated.");
+      } catch (e) {
+        console.error(e);
+        return;
+      }
     });
-
 
 /** Returns a list with the allowed images.
  * @param {array} images - List of found image files.
@@ -195,7 +185,7 @@ function getAllowedImages(images) {
   if (images) {
     // Filter response.
     for (const imageIndex in images) {
-      if (imageIndex >= 0 && imageIndex < images.length) {
+      if (imageIndex) {
         const fileParts = images[imageIndex].split(".");
         for (const fileFormatIndex in allowedFileFormats) {
           if (fileParts[fileParts.length - 1]
@@ -215,130 +205,139 @@ function getAllowedImages(images) {
  *
  * @param {string} image - Image file name
  * @param {string} apiUrl - Url to which the request is send.
- * @param {string} cookie - Cookie for wiki access.
- * @return {Promise} - Returns a promise.
+ * @param {string} requestCookie - Cookie for wiki access.
  *
  * Downloading code based on
  * https://stackoverflow.com/questions/55374755/node-js-axios-download-file-stream-and-writefile
  */
-function processImage(image, apiUrl, cookie) {
-  image = image.replace("File:", "");
-  image = image.replace(" ", "_");
-  // Get the original image url.
-  return axios.get(apiUrl, {
-    headers: {
-      Cookie: cookie,
-    },
-    params: {
-      "action": "query",
-      "titles": "Image:" + image,
-      "prop": "imageinfo",
-      "iiprop": "url",
-      "format": "json",
-    },
-    timeout: 5000,
-  })
-      .then((response) => {
-        if (response.status === 200) {
-          const pages = response.data.query.pages;
-          for (const pageId in pages) {
-            if (pageId) {
-              const originalUrl = pages[pageId].imageinfo[0].url;
-              if (originalUrl) {
-                // Download the image.
-                const filePath = Path.resolve(os.tmpdir(), image);
-                const writer = Fs.createWriteStream(filePath);
-                console.log(filePath);
+async function processImage(image, apiUrl, requestCookie) {
+  if (!image || !apiUrl || !requestCookie) {
+    console.log("Missing parameters for processing the image");
+    return;
+  }
+  try {
+    // Get the image details.
+    image = image.replace("File:", "");
+    image = image.replace(" ", "_");
+    console.log(image);
+    let response = await axios.get(apiUrl, {
+      headers: {
+        Cookie: requestCookie,
+      },
+      params: {
+        "action": "query",
+        "titles": "Image:" + image,
+        "prop": "imageinfo",
+        "iiprop": "url",
+        "format": "json",
+      },
+    });
+    if (response.status !== 200) {
+      console.log("Could not obtain image details.");
+      return;
+    }
+    console.log("Got the image details.");
 
-                axios.get(originalUrl, {
-                  headers: {
-                    Cookie: cookie,
-                  },
-                  responseType: "stream",
-                  timeout: 10000,
-                })
-                    .then((response) => {
-                      // Make sure the file is completely written
-                      // bevor then is called.
-                      const saveToFile = new Promise(
-                          (resolve, reject) => {
-                            response.data.pipe(writer);
-                            let error = null;
-                            writer.on("error", (err) => {
-                              error = err;
-                              writer.close();
-                              Fs.unlinkSync(filePath);
-                              reject(err);
-                            });
-                            writer.on("close", () => {
-                              if (!error) {
-                                resolve(true);
-                              }
-                            });
-                          }
-                      );
-                      saveToFile
-                          .then(() => {
-                            // Upload file to Storage and Firestore.
-                            const storagePath = "images/poc-bot/" + image;
-                            console.log(storagePath);
-                            admin.storage().bucket().upload(filePath,
-                                {destination: storagePath})
-                                .then((response) => {
-                                  // Add Firestore entry.
-                                  Fs.unlinkSync(filePath);
-                                  console.log(response);
-                                  const imageName = image.split(".")[0];
-                                  const collection = admin.firestore()
-                                      .collection("training-grounds");
-                                  // Data of the entry.
-                                  const data ={
-                                    "name": imageName,
-                                    "storagePath": storagePath,
-                                    "image": null,
-                                  };
-                                  collection
-                                      .where("name", "==", imageName)
-                                      .get()
-                                      .then((result) => {
-                                        // Replace entry or add a new one
-                                        // based on the image name.
-                                        if (result.docs.length > 0) {
-                                          collection.doc(result.docs[0].id)
-                                              .set(data)
-                                              .catch((error) => {
-                                                throw error;
-                                              });
-                                        } else {
-                                          collection.add(data)
-                                              .catch((error) => {
-                                                throw error;
-                                              });
-                                        }
-                                      })
-                                      .catch((error) => {
-                                        throw error;
-                                      });
-                                })
-                                .catch((error) => {
-                                  console.log(error);
-                                  Fs.unlinkSync(filePath);
-                                  throw error;
-                                });
-                          })
-                          .catch((error) => {
-                            throw error;
-                          });
-                    })
-                    .catch((error) => {
-                      throw error;
-                    });
-              }
-            }
-          }
+    // Retrieve the download url.
+    let downloadUrl;
+    const pages = response.data.query.pages;
+    for (const pageId in pages) {
+      if (pageId) {
+        const currentUrl = pages[pageId].imageInfo[0].url;
+        if (currentUrl === downloadUrl) {
+          continue;
+        } else {
+          downloadUrl = currentUrl;
         }
-      })
-      .catch((error) => {
-        throw error;
-      });
+      }
+    }
+    if (!downloadUrl) {
+      console.log("Could not find the download url.");
+      return;
+    }
+    console.log("Download url:");
+    console.log(downloadUrl);
+
+    // Download image to local tmp directory.
+    const filePath = Path.resolve(os.tmpdir(), image);
+    const writer = Fs.createWriteStream(filePath);
+    response = await axios.get(downloadUrl, {
+      headers: {
+        Cookie: requestCookie,
+      },
+      responseType: "stream",
+    });
+    if (!response) {
+      console.log("Image download failed.");
+      return;
+    }
+    console.log("Saving to local dir...");
+    // Make sure the file is completely written
+    // bevor then is called.
+    const saveStream = new Promise(
+        (resolve, reject) => {
+          response.data.pipe(writer);
+          let error = null;
+          writer.on("error", (err) => {
+            error = err;
+            console.error(error);
+            writer.close();
+            Fs.unlinkSync(filePath);
+            reject(err);
+          });
+          writer.on("close", () => {
+            if (!error) {
+              console.log("Image saved locally.");
+              resolve(true);
+            } else {
+              console.log("Failed to save image locally.");
+              reject(error);
+            }
+          });
+        },
+    );
+    await saveStream;
+
+    // Upload file to Storage.
+    console.log("Uploading to storage...");
+    const storagePath = "images/poc-bot/" + image;
+    console.log(storagePath);
+    try {
+      await admin.storage().bucket().upload(filePath, {
+        destination: storagePath},
+      );
+    } catch (e) {
+      console.log("Upload failed");
+      console.error(e);
+    } finally {
+      Fs.unlinkSync(filePath);
+    }
+    console.log("Uploaded to storage.");
+
+    // Add entry to Firestore. Replaces old entries based on file name.
+    console.log("Adding Firestore entry...");
+    const imageName = image.split(".")[0];
+    const collection = admin.firestore().collection("training-grounds");
+    const data = {
+      "name": imageName,
+      "storagePath": storagePath,
+      "image": null,
+    };
+    const docsWithSameName = await collection
+        .where("name", "==", imageName).get();
+    if (docsWithSameName.length > 0) {
+      console.log("Replacing old entry.");
+      const doc = docsWithSameName.docs[0];
+      await collection.doc(doc.id).set(data);
+    } else {
+      console.log("New entry");
+      collection.add(data);
+    }
+    console.log("Image processed succesfully.");
+    return;
+  } catch (e) {
+    console.log("Image processing failed.");
+    console.error(e);
+    return;
+  }
 }
