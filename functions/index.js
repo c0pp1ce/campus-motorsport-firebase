@@ -243,7 +243,8 @@ async function processImage(image, apiUrl, requestCookie) {
     const pages = response.data.query.pages;
     for (const pageId in pages) {
       if (pageId) {
-        const currentUrl = pages[pageId].imageInfo[0].url;
+        console.log(pages[pageId]);
+        const currentUrl = pages[pageId].imageinfo[0].url;
         if (currentUrl === downloadUrl) {
           continue;
         } else {
