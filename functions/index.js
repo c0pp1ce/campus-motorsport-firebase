@@ -151,13 +151,42 @@ exports.getTrainingGroundsOverviews = functions.https.onCall(
 
         // Process the images: Get image, store it in Storage, add entry
         // in Firestore.
+        const allEntryIds = [];
         for (const index in images) {
           if (index) {
             console.log("Processing an image...");
-            await processImage(images[index], apiUrl, requestCookie);
+            allEntryIds.push(
+                await processImage(images[index], apiUrl, requestCookie),
+            );
           }
         }
         console.log("All images processed.");
+
+        // Delete entries which have not been found in the wiki.
+        // Aka which were removed since the last update.
+        console.log("Clean up deleted training grounds...");
+        const allDocs = await admin.firestore().collection("training-grounds")
+            .get();
+        for (const index in allDocs.docs) {
+          if (allEntryIds.includes(allDocs.docs[index].id)) {
+            continue;
+          } else {
+            console.log("Removed TG found.");
+            console.log(allDocs.docs[index].id);
+            console.log("Deleting from Firestore...");
+            await admin.firestore().collection("training-grounds")
+                .doc(allDocs.docs[index].id)
+                .delete();
+            const data = allDocs.docs[index].data();
+            if (data) {
+              console.log("Deleting image");
+              await admin.storage().bucket()
+                  .file(data.storagePath)
+                  .delete();
+            }
+          }
+        }
+        console.log("Cleanup done.");
 
         // Update meta info.
         console.log("Updating meta-info...");
@@ -206,6 +235,7 @@ function getAllowedImages(images) {
  * @param {string} image - Image file name
  * @param {string} apiUrl - Url to which the request is send.
  * @param {string} requestCookie - Cookie for wiki access.
+ * @return {string} Null if the processing fails, imageName else.
  *
  * Downloading code based on
  * https://stackoverflow.com/questions/55374755/node-js-axios-download-file-stream-and-writefile
@@ -213,7 +243,7 @@ function getAllowedImages(images) {
 async function processImage(image, apiUrl, requestCookie) {
   if (!image || !apiUrl || !requestCookie) {
     console.log("Missing parameters for processing the image");
-    return;
+    return null;
   }
   try {
     // Get the image details.
@@ -234,7 +264,7 @@ async function processImage(image, apiUrl, requestCookie) {
     });
     if (response.status !== 200) {
       console.log("Could not obtain image details.");
-      return;
+      return null;
     }
     console.log("Got the image details.");
 
@@ -243,7 +273,6 @@ async function processImage(image, apiUrl, requestCookie) {
     const pages = response.data.query.pages;
     for (const pageId in pages) {
       if (pageId) {
-        console.log(pages[pageId]);
         const currentUrl = pages[pageId].imageinfo[0].url;
         if (currentUrl === downloadUrl) {
           continue;
@@ -254,7 +283,7 @@ async function processImage(image, apiUrl, requestCookie) {
     }
     if (!downloadUrl) {
       console.log("Could not find the download url.");
-      return;
+      return null;
     }
     console.log("Download url:");
     console.log(downloadUrl);
@@ -270,7 +299,7 @@ async function processImage(image, apiUrl, requestCookie) {
     });
     if (!response) {
       console.log("Image download failed.");
-      return;
+      return null;
     }
     console.log("Saving to local dir...");
     // Make sure the file is completely written
@@ -310,9 +339,10 @@ async function processImage(image, apiUrl, requestCookie) {
     } catch (e) {
       console.log("Upload failed");
       console.error(e);
-    } finally {
       Fs.unlinkSync(filePath);
+      return null;
     }
+    Fs.unlinkSync(filePath);
     console.log("Uploaded to storage.");
 
     // Add entry to Firestore. Replaces old entries based on file name.
@@ -324,21 +354,12 @@ async function processImage(image, apiUrl, requestCookie) {
       "storagePath": storagePath,
       "image": null,
     };
-    const docsWithSameName = await collection
-        .where("name", "==", imageName).get();
-    if (docsWithSameName.length > 0) {
-      console.log("Replacing old entry.");
-      const doc = docsWithSameName.docs[0];
-      await collection.doc(doc.id).set(data);
-    } else {
-      console.log("New entry");
-      collection.add(data);
-    }
+    await collection.doc(imageName).set(data);
     console.log("Image processed succesfully.");
-    return;
+    return imageName;
   } catch (e) {
     console.log("Image processing failed.");
     console.error(e);
-    return;
+    return null;
   }
 }
