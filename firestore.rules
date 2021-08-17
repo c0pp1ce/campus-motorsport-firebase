@@ -129,7 +129,7 @@ service cloud.firestore {
     match /team-structure/{document} {
 
       function verifyContainerStructure() {
-        return verifyFields(["name", "storagePath", "lastUpdate"], ["url"]);
+        return verifyFields(["name", "storagePath"], ["url"]);
       }
 
     	allow read: if isAcceptedUser();
