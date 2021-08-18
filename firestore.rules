@@ -138,6 +138,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // clipboards
+    match /clipboards/{document} {
+
+      function verifyContainerStructure() {
+        return verifyFields(["name", "creationDate", "content", "type"], ["image"]);
+      }
+
+    	allow read: if isAcceptedUser();
+    	allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     // meta-info
     //
     // This collection holds info like when has training-grounds been updated etc.
