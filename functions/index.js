@@ -67,6 +67,19 @@ exports.deleteUserFromAuth = functions.firestore.document("users/{uid}")
           });
     });
 
+// Delete user from DB if he is deleted from auth.
+exports.sendByeEmail = functions.auth.user().onDelete((user) => {
+  return admin.firestore().collection("users").doc(user.uid).delete()
+      .then((result) => {
+        console.log("User deleted from db.");
+        return;
+      })
+      .catch((err) => {
+        console.error(err);
+        return err;
+      });
+});
+
 
 /** Retrieve images of the training grounds.
  * Each request with timeouts after 5s(image download after 10s).
