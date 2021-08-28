@@ -68,7 +68,7 @@ exports.deleteUserFromAuth = functions.firestore.document("users/{uid}")
     });
 
 // Delete user from DB if he is deleted from auth.
-exports.sendByeEmail = functions.auth.user().onDelete((user) => {
+exports.deleteUserFromDB = functions.auth.user().onDelete((user) => {
   return admin.firestore().collection("users").doc(user.uid).delete()
       .then((result) => {
         console.log("User deleted from db.");
