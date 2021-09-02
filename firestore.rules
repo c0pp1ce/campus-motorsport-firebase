@@ -31,8 +31,7 @@ service cloud.firestore {
     
     // Checks if the current user is an admin. Admins need to be accepted users.
     function isAdmin() {
-      return isAcceptedUser()
-      	&& get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      return isAcceptedUser() && request.auth.token.accepted == true;
     }
     
     
