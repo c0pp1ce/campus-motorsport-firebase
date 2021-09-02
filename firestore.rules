@@ -25,13 +25,13 @@ service cloud.firestore {
       
     // Checks if the user has been accepted. Accepted users need to have a verified email.
     function isAcceptedUser() {
-      return  isVerifiedUser()
-      	&& get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accepted == true;
+      return  isVerifiedUser() && request.auth.token.accepted == true;
     }
     
     // Checks if the current user is an admin. Admins need to be accepted users.
     function isAdmin() {
-      return isAcceptedUser() && request.auth.token.accepted == true;
+      return isAcceptedUser() && 
+      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
     
     
